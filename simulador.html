@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      p.timestamp = message.timestamp;
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+(function() {
+  if (window.__playableTouchPatchInstalled) return;
+  window.__playableTouchPatchInstalled = true;
+  var origAdd = EventTarget.prototype.addEventListener;
+  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
+  EventTarget.prototype.addEventListener = function(type, listener, options) {
+    if (blockedTypes[type]) {
+      if (options === undefined || options === null) {
+        options = { passive: true };
+      } else if (typeof options === 'boolean') {
+        options = { capture: options, passive: true };
+      } else {
+        options = Object.assign({}, options, { passive: true });
+      }
+    }
+    return origAdd.call(this, type, listener, options);
+  };
+})();
+</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador TSJE - Internas ANR 2026</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #a8a8a8;
+  text-transform: uppercase;
+  color: #000;
+  user-select: none;
+}
+.simulator {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 20px rgba(0,0,0,0.4);
+}
+header {
+  background: #5a5a5a;
+  color: white;
+  padding: 8px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 75px;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-municipales {
+  width: 65px;
+  height: 65px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #1a3d7c;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.1;
+  border: 2px solid #c00;
+}
+.header-center {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: bold;
+  padding: 0 15px;
+  letter-spacing: 0.3px;
+}
+.header-right {
+  background: white;
+  padding: 4px 12px;
+  text-align: center;
+  min-width: 80px;
+}
+.tsje-text {
+  color: #003399;
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+.tsje-sub {
+  font-size: 8px;
+  color: #333;
+  font-weight: bold;
+  margin-top: -2px;
+}
+.title-bar {
+  background: white;
+  padding: 14px 20px 10px;
+  text-align: center;
+  border-bottom: 3px solid #d0d0d0;
+}
+.title-bar h1 {
+  font-size: 22px;
+  font-weight: bold;
+  color: #000;
+  letter-spacing: 0.5px;
+}
+#screen-subtitle {
+  font-size: 16px;
+  margin-top: 4px;
+  font-weight: bold;
+  color: #222;
+  display: none;
+}
+main {
+  flex: 1;
+  padding: 25px 20px;
+}
+.grid-intendente {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+.card {
+  background: #ffffff;
+  border: 2px solid #b8b8b8;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.card:hover {
+  border-color: #888;
+}
+.card.selected {
+  border: 4px solid #0066cc !important;
+  transform: scale(0.99);
+}
+.card-intendente {
+  height: 185px;
+  display: flex;
+  flex-direction: column;
+}
+.card-header {
+  text-align: center;
+  padding: 7px 5px;
+  font-size: 14px;
+  font-weight: bold;
+  border-bottom: 1px solid #ccc;
+  background: #fafafa;
+}
+.card-body-int {
+  flex: 1;
+  display: flex;
+  padding: 8px 10px;
+  align-items: center;
+  gap: 10px;
+}
+.candidate-photo {
+  width: 95px;
+  height: 115px;
+  object-fit: cover;
+  border: 1px solid #999;
+  background: #eee;
+  flex-shrink: 0;
+}
+.card-info {
+  flex: 1;
+  text-align: center;
+}
+.lista-grande {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  color: #000;
+}
+.sigla {
+  font-size: 17px;
+  font-weight: bold;
+  margin-top: 5px;
+  color: #222;
+}
+.card-footer {
+  text-align: center;
+  padding: 7px 5px;
+  font-size: 14px;
+  font-weight: bold;
+  border-top: 1px solid #ccc;
+  background: #f5f5f5;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.voto-blanco {
+  height: 185px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  padding: 20px;
+}
+.grid-listas {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  max-width: 1050px;
+  margin: 0 auto;
+}
+.card-lista {
+  height: 165px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+.lista-num {
+  font-size: 13px;
+  font-weight: bold;
+  text-align: left;
+  margin-bottom: 5px;
+}
+.movimiento {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1.25;
+  padding: 5px 0;
+}
+.sigla-lista {
+  font-size: 14px;
+  font-weight: bold;
+  padding-top: 5px;
+  border-top: 1px solid #e0e0e0;
+}
+.grid-junta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.card-junta {
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+}
+.junta-body {
+  flex: 1;
+  display: flex;
+  padding: 8px;
+  align-items: center;
+  gap: 8px;
+}
+.junta-photo {
+  width: 78px;
+  height: 98px;
+  object-fit: cover;
+  border: 1px solid #999;
+  background: #eee;
+  flex-shrink: 0;
+}
+.opcion-num {
+  flex: 1;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 900;
+}
+.junta-footer {
+  padding: 6px 5px;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  border-top: 1px solid #ccc;
+  background: #f7f7f7;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+#screen4 {
+  padding: 0 !important;
+}
+.resumen-wrapper {
+  display: flex;
+  min-height: 520px;
+}
+.resumen-panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+  padding: 25px;
+  background: #e0e0e0;
+}
+.panel {
+  background: white;
+  border: 2px solid #b8b8b8;
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.panel-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+.panel-mov {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.panel-lista {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 18px;
+  color: #222;
+}
+.sel-box {
+  width: 100%;
+  max-width: 260px;
+  background: #fff;
+  border: 2px solid #b0b0b0;
+  padding: 12px;
+  margin-bottom: 15px;
+}
+.sel-box img {
+  width: 110px;
+  height: 135px;
+  object-fit: cover;
+  border: 1px solid #999;
+  display: block;
+  margin: 0 auto 10px;
+}
+.sel-nombre {
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 1.3;
+}
+.sel-opcion {
+  font-size: 13px;
+  margin-top: 3px;
+  color: #333;
+}
+.btn-modificar {
+  background: #e8e8e8;
+  border: 2px solid #999;
+  padding: 8px 35px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 14px;
+  margin-top: auto;
+}
+.btn-modificar:hover {
+  background: #d8d8d8;
+}
+.panel-actions {
+  width: 210px;
+  background: #d5d5d5;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-left: 3px solid #bbb;
+}
+.action-orange {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 22px 10px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 14px;
+  line-height: 1.3;
+  border-bottom: 3px solid #bbb;
+}
+.action-orange:hover {
+  background: #d35400;
+}
+.action-green {
+  background: #27ae60;
+  color: white;
+  border: none;
+  flex: 1;
+  padding: 30px 10px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-size: 17px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.action-green:hover {
+  background: #219653;
+}
+.icon-circle {
+  font-size: 28px;
+  line-height: 1;
+}
+.icon-print {
+  font-size: 48px;
+  line-height: 1;
+}
+footer {
+  background: #cfcfcf;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 2px solid #aaa;
+}
+.btn-footer {
+  background: linear-gradient(to bottom, #f8f8f8, #e0e0e0);
+  border: 1px solid #888;
+  padding: 9px 22px;
+  cursor: pointer;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 13px;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.btn-footer:hover {
+  background: linear-gradient(to bottom, #fff, #e8e8e8);
+}
+.high-contrast {
+  filter: contrast(1.5) brightness(0.9);
+}
+.high-contrast .card,
+.high-contrast .panel {
+  border-width: 3px;
+  border-color: #000 !important;
+}
+@media (max-width: 950px) {
+  .grid-intendente { grid-template-columns: repeat(2, 1fr); }
+  .grid-listas { grid-template-columns: repeat(3, 1fr); }
+  .grid-junta { grid-template-columns: repeat(3, 1fr); }
+  .resumen-panels { grid-template-columns: 1fr; }
+  .panel-actions { width: 160px; }
+}
+@media (max-width: 640px) {
+  .grid-intendente, .grid-listas, .grid-junta { grid-template-columns: 1fr; }
+  .header-center { font-size: 9px; padding: 0 8px; }
+  .resumen-wrapper { flex-direction: column; }
+  .panel-actions { width: 100%; flex-direction: row; height: 100px; }
+  .action-green { flex-direction: row; font-size: 14px; }
+  header { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="simulator">
+  <header>
+    <div class="header-left">
+      <div class="logo-municipales">ELECCIONES<br>MUNICIPALES<br>2026</div>
+    </div>
+    <div class="header-center">
+      ELECCIÓN: ASOCIACION NACIONAL REPUBLICANA DEPARTAMENTO: 11-CENTRAL DISTRITO: 3-FERNANDO DE LA MORA ZONA: 357-FDO. DE LA MORA 4 LOCAL:
+    </div>
+    <div class="header-right">
+      <div class="tsje-text">TSJE</div>
+      <div class="tsje-sub">JUSTICIA ELECTORAL</div>
+    </div>
+  </header>
+  
+  <div class="title-bar">
+    <h1 id="screen-title">CANDIDATOS A INTENDENTE MUNICIPAL</h1>
+    <div id="screen-subtitle">Lista 6 COLORADO AÑETETE</div>
+  </div>
+
+  <main>
+    <!-- PANTALLA 1 -->
+    <section id="screen1">
+      <div class="grid-intendente">
+        <div class="card card-intendente" data-key="2F">
+          <div class="card-header">HONOR COLORADO F</div>
+          <div class="card-body-int">
+            <img class="candidate-photo" src="data:image/png;base64,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

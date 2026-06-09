@@ -1,0 +1,7 @@
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /padapplus.html HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /padronapp1.png HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /padronapp.csv HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /padronapp.png HTTP/1.1" 200 -
+127.0.0.1 - - [10/Apr/2026 16:29:33] "GET /index.html HTTP/1.1" 200 -
