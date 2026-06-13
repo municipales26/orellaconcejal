@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>PADRONAPP - Padrón ANR 2026</title>
+    <title>PADRONAPP - Padrón General 2026</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     
     <style>
@@ -168,7 +168,7 @@
 
     <div class="container">
         <img src="padronapp1.png" alt="logo" class="logo">
-        <div class="red-banner">Padrón ANR 2026 - Fernando de la Mora</div>
+        <div class="red-banner">Padrón General 2026 - Fernando de la Mora</div>
         
         <div id="search-card" class="card">
             <div class="form-group">
@@ -206,7 +206,7 @@
             <button class="btn btn-whatsapp" id="enviar-wa">ENVIAR POR WHATSAPP</button>
         </div>
         <div class="footer-text">
-            Padrón Actualizado de Afiliados a la ANR para las Internas del 07-Junio-2026.
+            Padrón General Actualizado para las Municipales del 04-Octubre-2026.
         </div>
     </div>
 
@@ -426,7 +426,8 @@
             });
 
             const encodedMessage = encodeURIComponent(message);
-            const waUrl = `https://wa.me/595994329417?text=${encodedMessage}`;
+            const waUrl = `https://wa.me/595992776729?text=${encodedMessage}`;
+           // const waUrl = `https://wa.me/595994329417?text=${encodedMessage}`;
             window.open(waUrl, '_blank');
         });
         if ('serviceWorker' in navigator) {
